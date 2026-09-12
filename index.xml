@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<index version="1.0" name="Ilves Audio">
+
+  <!-- Effects -->
+  <category name="EQ">
+    <reapack name="R242 EQ" type="effect" desc="R242 EQ">
+      <version name="0.1" author="Ilves Audio" time="12-09-2026">
+        <source main="main">paste raw link here</source>
+      </version>
+    </reapack>
+  </category>
+
+</index>
