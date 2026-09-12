@@ -3,9 +3,25 @@
 
   <!-- Effects -->
   <category name="EQ">
-    <reapack name="R242 EQ" type="effect" desc="R242 EQ">
+    <reapack name="R242" type="effect" desc="R242">
       <version name="0.1" author="Ilves Audio" time="12-09-2026">
-        <source main="main">paste raw link here</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/R242</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/E242_EQ_backplate_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_horizontal_12db_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_horizontal_bell_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_horizontal_empty_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_vertical_bypass_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_vertical_clean_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_vertical_delta_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/button_isostat_vertical_empty_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/knob_sifam1_black_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/knob_sifam1_blue_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/knob_sifam1_green_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/knob_sifam1_red_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/knob_sifam1_white_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/led_green_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/led_red_small.png</source>
+        <source>https://github.com/paavoilves/Reaper/blob/6125573f365eefad4cc4f5b44b47def2250e3673/JSFX/R242/GUI/led_yellow_small.png</source>
       </version>
     </reapack>
   </category>
