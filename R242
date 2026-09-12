@@ -1,0 +1,1507 @@
+desc:R242 (Ilves Audio)
+
+FIX LIST:
+
+1. Find a reason for extra buttons
+    1. Clean DONE
+    2. Filter slope - black 18dB or fitted brown 12dB DONE
+    3. Bypass DONE
+    4. Delta DONE
+    5. SC insert - dry to spl0 & spl1, wet to spl2 & spl3
+    6. Auto gain?
+2. Apply NE5534 opamp clipping to EQ bands DONE
+3. Apply capacitor dielectric absorption (DA) to EQ bands (basically slight spl value smoothing) DONE
+
+
+slider1:hpf_hz=9<9,400,0.01:log=120>-HPF Hz
+slider2:lpf_khz=25<3,25,0.01:log=5>-LPF kHz
+slider3:hpf_12db=0<0,1,1>-12dB Slope
+
+slider5:hf_db=0<-15,15,0.1>-HF dB
+slider6:hf_khz=8<1.5,16,0.01:log=8>-HF kHz
+slider7:hf_bell=0<0,1,1>-HF Bell
+
+slider9:hmf_db=0<-15,15,0.1>-HMF dB
+slider10:hmf_khz=3<0.6,7,0.01:log=3>-HMF kHz
+slider11:hmf_q=1.5<3,0.5,0.01:log=1.5>-HMF Q
+
+slider13:lmf_db=0<-15,15,0.1>-LMF dB
+slider14:lmf_khz=1<0.2,2.5,0.01:log=1>-LMF kHz
+slider15:lmf_q=1.5<3,0.5,0.01:log=1.5>-LMF Q
+
+slider17:lf_db=0<-15,15,0.1>-LF dB
+slider18:lf_hz=200<30,450,1:log=200>-LF Hz
+slider19:lf_bell=0<0,1,1>-LF Bell
+
+slider21:switch1=0<0,1,1>-CLN
+slider22:switch2=0<0,1,1>-FLT DYN S/C
+slider23:switch3=0<0,1,1>-BYP
+
+options:no_meter
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+
+filename:0,E242_EQ_backplate_small.png
+filename:1,E242_EQ_backplate_guide_small.png
+filename:2,knob_sifam1_white_small.png
+filename:3,knob_sifam1_black_small.png
+filename:4,knob_sifam1_blue_small.png
+filename:5,knob_sifam1_green_small.png
+filename:6,knob_sifam1_red_small.png
+filename:7,button_isostat_horizontal_empty_small.png
+filename:8,button_isostat_vertical_empty_small.png
+filename:9,button_isostat_horizontal_bell_small.png
+filename:10,button_isostat_horizontal_12db_small.png
+filename:11,button_isostat_vertical_clean_small.png
+filename:12,button_isostat_vertical_bypass_small.png
+filename:13,led_green_small.png
+filename:14,led_yellow_small.png
+filename:15,led_red_small.png
+filename:16,button_isostat_vertical_delta_small.png
+
+
+@init
+
+        //Utility
+
+function second(value)
+    (value*srate);
+
+function millisecond(value)
+    (value*0.001*srate);
+    
+function deg(r)
+    (r / $pi * 180);
+    
+function rad(d)
+    (d * $pi / 180);
+    
+function sinh(x)(
+(exp(x) - exp(-x)) / 2
+);
+
+function cosh(x)(
+(exp(x) + exp(-x)) / 2
+);
+
+function tanh(x)(
+(exp(2*x) - 1) / (exp(2*x) + 1)
+);
+
+function clip(value, minvalue, maxvalue)
+    (min(max(value, minvalue), maxvalue));
+
+function truncate(value, step)
+    (floor(value / step) * step);
+
+
+        //Digital Signal Processing
+        
+        
+function opamp.NE5534.init()
+instance(freq,fc,G,G_,fm,phim,alpha,beta,a1,b,b0,b1,alpha_,beta_,a1_,b_,b0_,b1_,
+        bias,curve,clip_threshold,slew_limit,prev_input)(
+
+    fc = 20000 / srate * 0.5;
+    G  = 10^(6/20);
+    G_ = 10^(-6/20);
+
+    fm = 0.9;
+    phim = 1 - cos($pi * fm);
+
+    alpha = (2/sqr($pi)) * (1/(sqr(fm) * G * sqr(fc))) - (1/phim);
+    beta  = (2/sqr($pi)) * (G/(sqr(fm) * sqr(fc)))     - (1/phim);
+    a1 = -alpha / (1 + alpha + sqrt(1 + 2*alpha));
+    b  = -beta  / (1 + beta  + sqrt(1 + 2*beta));
+    b0 = (1 + a1) / (1 + b);
+    b1 = b * b0;
+
+    alpha_ = (2/sqr($pi)) * (1/(sqr(fm) * G_ * sqr(fc))) - (1/phim);
+    beta_  = (2/sqr($pi)) * (G_/(sqr(fm) * sqr(fc)))     - (1/phim);
+    a1_ = -alpha_ / (1 + alpha_ + sqrt(1 + 2*alpha_));
+    b_  = -beta_  / (1 + beta_  + sqrt(1 + 2*beta_));
+    b0_ = (1 + a1_) / (1 + b_);
+    b1_ = b_ * b0_;
+
+    curve = 40;
+    clip_threshold = 10^(2.5/20);
+    bias = 0.0005;
+
+    slew_rate = 13;
+    slew_limit = slew_rate / (srate / 10^6);
+
+    prev_input = 0;
+);
+
+function capacitor(input)
+local(input,da.strength,da.retention,da.absorption,da.charge,da.release)(
+
+    da.strength = 0.0001;
+    da.retention = 1-da.strength;
+    da.absorption = 1-da.retention;
+
+    da.charge = da.charge * da.retention + input * da.absorption;
+    da.release = da.charge * da.strength * sign(input);
+
+    input += da.release;
+);
+
+function opamp.NE5534.sample(input)
+instance(freq,fc,G,G_,fm,phim,alpha,beta,a1,b,b0,b1,alpha_,beta_,a1_,b_,b0_,b1_,
+        bias,curve,clip_threshold,slew_limit,prev_input,
+        x_n,x_n1,i_n,i_n1,y_n,y_n1,o_n,o_n1,
+        drive,absx1,x1,absx2,x2,dc)(
+
+    x_n1 = x_n;
+    x_n = input;
+    i_n1 = i_n;
+    i_n = b0 * x_n + b1 * x_n1 - a1 * i_n1;
+    input = i_n;
+
+    input = min(max(input, prev_input - slew_limit), prev_input + slew_limit);
+    prev_input = input;
+
+    x1 = (input + bias) / clip_threshold;
+    absx1 = abs(x1);
+    input = x1 / pow(1 + pow(absx1, curve), 1/curve) * clip_threshold - bias;
+
+    y_n1 = y_n;
+    y_n = input;
+    o_n1 = o_n;
+    o_n = b0_ * y_n + b1_ * y_n1 - a1_ * o_n1;
+    input = o_n;
+
+);
+
+function lowpass.init()
+instance(lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)(
+
+    this.opamp.NE5534.init();
+
+    lx_n = 0; lx_n1 = 0; lu_n = 0; lu_n1 = 0;
+    rx_n = 0; rx_n1 = 0; ru_n = 0; ru_n1 = 0;
+);
+
+function lowpass.slider(freqk,Q)
+instance(freq,Q,w0,q_,a1,a2,phi0,phi1,phi2,aa0,aa1,aa2,bb0,bb1,bb2,R1,b0,b1,b2)(
+
+    freq = freqk * 1000;
+
+    w0 = 2 * $pi * freq / srate;
+    q_ = 1 / (2 * Q);
+
+    q_ <= 1 ? (
+        a1 = -2 * exp(-q_ * w0) * cos(sqrt(1 - sqr(q_)) * w0)
+        ):(
+        a1 = -2 * exp(-q_ * w0) * cosh(sqrt(sqr(q_) - 1) * w0)
+    );
+    a2 = exp(-2 * q_ * w0);
+
+    b2 = 0;
+
+    phi0 = 1 - sqr(sin(w0/2));
+    phi1 = sqr(sin(w0/2));
+    phi2 = 4 * phi0 * phi1;
+
+    aa0 = sqr(1 + a1 + a2);
+    aa1 = sqr(1 - a1 + a2);
+    aa2 = -4 * a2;
+
+    bb0 = aa0;
+    R1 = (aa0*phi0 + aa1*phi1 + aa2*phi2) * sqr(Q);
+    bb1 = (R1 - bb0*phi0) / phi1;
+
+    b0 = 0.5 * (sqrt(bb0) + sqrt(bb1));
+    b1 = sqrt(bb0) - b0;
+
+);
+
+function lowpass.sample()
+instance(freq,Q,w0,q_,a1,a2,a_1,a_2,phi0,phi1,phi2,aa0,aa1,aa2,bb0,bb1,bb2,R1,b0,b1,b2,b_0,b_1,b_2,rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    gain_linear != 1 ? (
+
+        //---- added smoothing to prevent filters getting stuck
+        smoothing = 0.5;
+        a_1 += smoothing * (a1 - a_1);
+        a_2 += smoothing * (a2 - a_2);
+        b_0 += smoothing * (b0 - b_0);
+        b_1 += smoothing * (b1 - b_1);
+        b_2 += smoothing * (b2 - b_2);
+    
+        //---- left
+        lx_n2 = lx_n1;
+        lx_n1 = lx_n;
+        lx_n = spl0;
+        
+        lu_n2 = lu_n1;
+        lu_n1 = lu_n;
+        lu_n = b_0*lx_n + b_1*lx_n1 + b_2*lx_n2 - a_1*lu_n1 - a_2*lu_n2;
+        
+        //---- right
+        rx_n2 = rx_n1;
+        rx_n1 = rx_n;
+        rx_n = spl1;
+        
+        ru_n2 = ru_n1;
+        ru_n1 = ru_n;
+        ru_n = b_0*rx_n + b_1*rx_n1 + b_2*rx_n2 - a_1*ru_n1 - a_2*ru_n2;
+    
+        //----output
+        switch1 ? (
+            spl0 = lu_n;
+            spl1 = ru_n;
+            ):(
+            spl0 = capacitor(lu_n);
+            spl1 = capacitor(ru_n);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+        
+        //spl0 = ru_n;
+        //spl1 = lu_n;
+
+    );
+);
+
+function highpass.init()
+instance(rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    this.opamp.NE5534.init();
+
+    rx_n2 = 0; rx_n1 = 0; rx_n = 0;
+    ru_n2 = 0; ru_n1 = 0; ru_n = 0;
+    lx_n2 = 0; lx_n1 = 0; lx_n = 0;
+    lu_n2 = 0; lu_n1 = 0; lu_n = 0;
+);
+
+function highpass.slider(freq,Q)
+instance(freq,Q,w0,q_,a1,a2,phi0,phi1,phi2,aa0,aa1,aa2,b0,b1,b2)(
+
+    freq += 1;
+    w0 = 2 * $pi * freq / srate;
+    q_ = 1 / (2 * Q);
+
+    q_ <= 1 ? (
+        a1 = -2 * exp(-q_ * w0) * cos(sqrt(1 - sqr(q_)) * w0)
+        ):(
+        a1 = -2 * exp(-q_ * w0) * cosh(sqrt(sqr(q_) - 1) * w0)
+    );
+    a2 = exp(-2 * q_ * w0);
+
+    phi0 = 1 - sqr(sin(w0/2));
+    phi1 = sqr(sin(w0/2));
+    phi2 = 4 * phi0 * phi1;
+
+    aa0 = sqr(1 + a1 + a2);
+    aa1 = sqr(1 - a1 + a2);
+    aa2 = -4 * a2;
+
+    b0 = (sqrt(aa0*phi0 + aa1*phi1 + aa2*phi2) / (4*phi1)) * Q;
+    b1 = -2 * b0;
+    b2 = b0;
+
+);
+
+function highpass.sample()
+instance(freq,Q,w0,q_,a1,a2,a_1,a_2,phi0,phi1,phi2,aa0,aa1,aa2,b0,b1,b2,b_0,b_1,b_2,rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    //---- added smoothing to prevent filters getting stuck
+    smoothing = 0.5;
+    a_1 += smoothing * (a1 - a_1);
+    a_2 += smoothing * (a2 - a_2);
+    b_0 += smoothing * (b0 - b_0);
+    b_1 += smoothing * (b1 - b_1);
+    b_2 += smoothing * (b2 - b_2);
+
+    //---- left
+    lx_n2 = lx_n1;
+    lx_n1 = lx_n;
+    lx_n = spl0;
+
+    lu_n2 = lu_n1;
+    lu_n1 = lu_n;
+    lu_n = b_0*lx_n + b_1*lx_n1 + b_2*lx_n2 - a_1*lu_n1 - a_2*lu_n2;
+
+    //---- right
+    rx_n2 = rx_n1;
+    rx_n1 = rx_n;
+    rx_n = spl1;
+
+    ru_n2 = ru_n1;
+    ru_n1 = ru_n;
+    ru_n = b_0*rx_n + b_1*rx_n1 + b_2*rx_n2 - a_1*ru_n1 - a_2*ru_n2;
+
+    //----output
+    switch1 ? (
+        spl0 = lu_n;
+        spl1 = ru_n;
+        ):(
+        spl0 = capacitor(lu_n);
+        spl1 = capacitor(ru_n);
+        spl0 = this.opamp.NE5534.sample(spl0);
+        spl1 = this.opamp.NE5534.sample(spl1);
+    );
+    
+    //spl0 = ru_n;
+    //spl1 = lu_n;
+);
+
+function highpass.onepole.init()
+instance(lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)(
+
+    this.opamp.NE5534.init();
+
+    lx_n = 0; lx_n1 = 0; lu_n = 0; lu_n1 = 0;
+    rx_n = 0; rx_n1 = 0; ru_n = 0; ru_n1 = 0;
+    
+);
+
+function highpass.onepole.slider(freq)
+instance(w0,G,b0,b1,a1)
+(
+    freq += 1;
+    w0 = tan($pi*(freq/srate*0.5));
+    G = 1/(1+w0);
+
+    b0 = G/(1 + G*w0);
+    b1 = -b0;
+    a1 = -(1 - w0)/(1 + G*w0);
+);
+
+function highpass.onepole.sample()
+instance(a1,b,b0,b1,a_1,b_0,b_1,lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)
+(
+
+    //---- added smoothing to prevent filters getting stuck
+    smoothing = 0.5;
+    a_1 += smoothing * (a1 - a_1);
+    b_0 += smoothing * (b0 - b_0);
+    b_1 += smoothing * (b1 - b_1);
+
+/*
+    lu_n = b_0*spl0 + b_1*lx_n1 - a_1*lu_n1;
+    lx_n1 = spl0;
+    lu_n1 = lu_n;
+    spl0 = this.opamp.NE5534.sample(capacitor(lu_n));
+    //spl0 = lu_n;
+    
+    ru_n = b_0*spl1 + b_1*rx_n1 - a_1*ru_n1;
+    rx_n1 = spl1;
+    ru_n1 = ru_n;
+    spl1 = this.opamp.NE5534.sample(capacitor(ru_n));
+    //spl1 = ru_n;
+*/
+
+    lu_n = b_0*spl0 + b_1*lx_n1 - a_1*lu_n1;
+    lx_n1 = spl0;
+    lu_n1 = lu_n;
+    switch1 ? (
+        spl0 = lu_n;
+        ):(
+        spl0 = this.opamp.NE5534.sample(capacitor(lu_n));
+    );
+    //spl0 = lu_n;
+
+    ru_n = b_0*spl1 + b_1*rx_n1 - a_1*ru_n1;
+    rx_n1 = spl1;
+    ru_n1 = ru_n;
+    switch1 ? (
+        spl1 = ru_n;
+        ):(
+        spl1 = this.opamp.NE5534.sample(capacitor(ru_n));
+    );
+    //spl1 = ru_n;
+
+);
+
+/*
+function bandpass.slider(freq,Q)
+instance(freq,Q,w0,q_,a1,a2,phi0,phi1,phi2,aa0,aa1,aa2,bb0,R1,R2,bb2,bb1,b0,b1,b2)(
+
+    this.opamp.NE5534.init();
+
+    w0 = 2 * $pi * freq / srate;
+    q_ = 1 / (2 * Q);
+
+    q_ <= 1 ? (
+        a1 = -2 * exp(-q_ * w0) * cos(sqrt(1 - sqr(q_)) * w0)
+        ):(
+        a1 = -2 * exp(-q_ * w0) * cosh(sqrt(sqr(q_) - 1) * w0)
+    );
+    a2 = exp(-2 * q_ * w0);
+
+    phi0 = 1 - sqr(sin(w0/2));
+    phi1 = sqr(sin(w0/2));
+    phi2 = 4 * phi0 * phi1;
+
+    aa0 = sqr(1 + a1 + a2);
+    aa1 = sqr(1 - a1 + a2);
+    aa2 = -4 * a2;
+
+    bb0 = 0;
+    R1 = aa0*phi0 + aa1*phi1 + aa2*phi2;
+    R2 = -aa0 + aa1 + 4*(phi0 - phi1)*aa2;
+    bb2 = (R1 - R2*phi1) / (4*sqr(phi1));
+    bb1 = R2 + 4*(phi1 - phi0)*bb2;
+
+    b1 = -0.5*sqrt(bb1);
+    b0 = 0.5*(sqrt(bb2 + sqr(b1))-b1);
+    b2 = -b0 - b1;
+
+);
+
+function bandpass.sample()
+instance(freq,Q,w0,q_,a1,a2,a_1,a_2,phi0,phi1,phi2,aa0,aa1,aa2,bb0,R1,R2,bb2,bb1,b_0,b_1,b_2,b0,b1,b2,rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    //---- added smoothing to prevent filters getting stuck
+    smoothing = 0.005;
+    a_1 += smoothing * (a1 - a_1);
+    a_2 += smoothing * (a2 - a_2);
+    b_0 += smoothing * (b0 - b_0);
+    b_1 += smoothing * (b1 - b_1);
+    b_2 += smoothing * (b2 - b_2);
+
+    //---- left
+    lx_n2 = lx_n1;
+    lx_n1 = lx_n;
+    lx_n = spl0;
+
+    lu_n2 = lu_n1;
+    lu_n1 = lu_n;
+    lu_n = b_0*lx_n + b_1*lx_n1 + b_2*lx_n2 - a_1*lu_n1 - a_2*lu_n2;
+    
+    //---- right
+    rx_n2 = rx_n1;
+    rx_n1 = rx_n;
+    rx_n = spl1;
+
+    ru_n2 = ru_n1;
+    ru_n1 = ru_n;
+    ru_n = b_0*rx_n + b_1*rx_n1 + b_2*rx_n2 - a_1*ru_n1 - a_2*ru_n2;
+
+    //----output
+    switch1 ? (
+        spl0 = lu_n;
+        spl1 = ru_n;
+        ):(
+        spl0 = capacitor(lu_n);
+        spl1 = capacitor(ru_n);
+        spl0 = this.opamp.NE5534.sample(spl0);
+        spl1 = this.opamp.NE5534.sample(spl1);
+    );
+    
+    //spl0 = ru_n;
+    //spl1 = lu_n;
+
+);
+*/
+
+
+function peaking.init()
+instance(rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    this.opamp.NE5534.init();
+    
+    rx_n2 = 0; rx_n1 = 0; rx_n = 0;
+    ru_n2 = 0; ru_n1 = 0; ru_n = 0;
+    lx_n2 = 0; lx_n1 = 0; lx_n = 0;
+    lu_n2 = 0; lu_n1 = 0; lu_n = 0;
+);
+
+function peaking.slider(gain,freqk,Q)
+instance(gain,gain_linear,freq,Q,w0,q_,a1,a2,phi0,phi1,phi2,G2,aa0,aa1,aa2,bb0,R1,R2,bb2,bb1,W,b0,b1,b2)(
+
+    freq = freqk;
+    gain < 0 ? (Q *= 0.15; gain *= 1.25);
+    
+    gain *= 1.05 * sqrt(sqrt(sqrt(Q)));
+    gain_linear = 10^(gain/20);
+
+    w0 = 2 * $pi * freq / srate;
+    q_ = 1 / (2 * Q);
+
+    q_ <= 1 ? (
+        a1 = -2 * exp(-q_ * w0) * cos(sqrt(1 - sqr(q_)) * w0)
+        ):(
+        a1 = -2 * exp(-q_ * w0) * cosh(sqrt(sqr(q_) - 1) * w0)
+    );
+    a2 = exp(-2 * q_ * w0);
+
+    phi0 = 1 - sqr(sin(w0/2));
+    phi1 = sqr(sin(w0/2));
+    phi2 = 4 * phi0 * phi1;
+
+    aa0 = sqr(1 + a1 + a2);
+    aa1 = sqr(1 - a1 + a2);
+    aa2 = -4 * a2;
+
+    bb0 = aa0;
+    G2 = sqr(gain_linear);
+    R1 = (aa0*phi0 + aa1*phi1 + aa2*phi2) * G2;
+    R2 = (-aa0 + aa1 + 4*(phi0 - phi1)*aa2) * G2;
+    bb2 = (R1 - R2*phi1 - bb0) / (4*sqr(phi1));
+    bb1 = R2 + bb0 + 4*(phi1 - phi0)*bb2;
+
+
+    W = 0.5 * (sqrt(bb0) + sqrt(bb1));
+    b0 = 0.5 * (W + sqrt(sqr(W) + bb2));
+    b1 = 0.5 * (sqrt(bb0) - sqrt(bb1));
+    b2 = -bb2 / (4 * b0);
+
+);
+
+function peaking.sample()
+instance(gain,gain_linear,freq,Q,w0,q_,a1,a2,a_1,a_2,phi0,phi1,phi2,G2,aa0,aa1,aa2,bb0,R1,R2,bb2,bb1,W,b0,b1,b2,b_0,b_1,b_2,rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    gain_linear != 1 ? (
+
+        //---- added smoothing to prevent filters getting stuck
+        smoothing = 0.5;
+        a_1 += smoothing * (a1 - a_1);
+        a_2 += smoothing * (a2 - a_2);
+        b_0 += smoothing * (b0 - b_0);
+        b_1 += smoothing * (b1 - b_1);
+        b_2 += smoothing * (b2 - b_2);
+    
+        //---- left
+        lx_n2 = lx_n1;
+        lx_n1 = lx_n;
+        lx_n = spl0;
+        
+        lu_n2 = lu_n1;
+        lu_n1 = lu_n;
+        lu_n = b_0*lx_n + b_1*lx_n1 + b_2*lx_n2 - a_1*lu_n1 - a_2*lu_n2;
+    
+        //---- right
+        rx_n2 = rx_n1;
+        rx_n1 = rx_n;
+        rx_n = spl1;
+    
+        ru_n2 = ru_n1;
+        ru_n1 = ru_n;
+        ru_n = b_0*rx_n + b_1*rx_n1 + b_2*rx_n2 - a_1*ru_n1 - a_2*ru_n2;
+    
+        //----output
+        switch1 ? (
+            spl0 = lu_n;
+            spl1 = ru_n;
+            ):(
+            spl0 = capacitor(lu_n);
+            spl1 = capacitor(ru_n);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+        
+        ):(
+        
+        //----output
+        switch1 ? (
+            spl0 = spl0;
+            spl1 = spl1;
+            ):(
+            spl0 = capacitor(spl0);
+            spl1 = capacitor(spl1);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+    );
+
+
+);
+
+/*
+//---- Code ported from Vicanek pseudocode <3
+
+function highshelf.slider(gain,freqk)
+instance(gain,freq,gain_linear,smoothing,g,fc,pihalf,invg,fc4,hny,f1,f14,h1,phi1,f2,f24,h2,phi2,
+d1,c11,c12,d2,c21,c22,alfa1,aa1,bb1,aa2,bb2,v,w,a0,inva0,a1,a2,b0,b1,b2)(
+
+// Matched 2-Pole Butterworth High Shelf Filter
+// --------------------------------------------
+// Inputs:
+// fc (center frequency/ Nyquist frequency)
+// gain (shelf gain factor)
+// Outputs:
+// a1, a2, b0, b1, b2 (biquad filter coefficients)
+// special case gain = 1 (flat response)
+
+    freq = freqk * 1000;
+    gain_linear = 10^(gain/20);
+    smoothing = 0.0005;
+
+    fc = freq / srate * 2;
+
+    (abs(1 - gain_linear) < 0.000001) ?
+        g = 1.00001 : g = gain_linear;
+
+    // abbreviations
+    pihalf = 1.5708;
+    invg = 1.0/g;
+
+    // matching gain at Nyquist
+    fc4 = fc^4;
+    hny = (fc4 + g)/(fc4 + invg);
+
+    // matching gain at f_1
+    f1 = fc/sqrt(0.160 + 1.543*fc*fc);
+    f14 = f1^4;
+    h1 = (fc4 + f14*g)/(fc4 + f14*invg);
+    phi1 = sin(pihalf*f1)^2;
+
+    // matching gain at f_2
+    f2 = fc/sqrt(0.947 + 3.806*fc*fc);
+    f24 = f2^4;
+    h2 = (fc4 + f24*g)/(fc4 + f24*invg);
+    phi2 = sin(pihalf*f2)^2;
+
+    // linear equations coefficients
+    d1 = (h1 - 1.0)*(1.0 - phi1);
+    c11 = -phi1*d1;
+    c12 = phi1*phi1*(hny - h1);
+    d2 = (h2 - 1.0)*(1.0 - phi2);
+    c21 = -phi2*d2;
+    c22 = phi2*phi2*(hny - h2);
+
+    // linear equations solution
+    alfa1 = (c22*d1 - c12*d2)/(c11*c22 - c12*c21);
+    aa1 = (d1 - c11*alfa1)/c12;
+    bb1 = hny*aa1;
+
+    // compute A_2 and B_2
+    aa2 = 0.25*(alfa1 - aa1);
+    bb2 = 0.25*(alfa1 - bb1);
+
+    // compute biquad coefficients scaled with 1/a_0
+    v = 0.5*(1.0 + sqrt(aa1));
+    w = 0.5*(1.0 + sqrt(bb1));
+    a0 = 0.5*(v + sqrt(v*v + aa2));
+    inva0 = 1.0/a0;
+    a1 = (1.0 - v)*inva0;
+    a2 = -0.25*aa2*inva0*inva0;
+    b0 = (0.5*(w + sqrt(w*w + bb2)))*inva0;
+    b1 = (1.0 - w)*inva0;
+    b2 = (-0.25*bb2/b0)*inva0*inva0;
+
+);
+
+function highshelf.sample()
+instance(gain,freq,gain_linear,smoothing,g,fc,pihalf,invg,fc4,hny,f1,f14,h1,phi1,f2,f24,h2,phi2,
+d1,c11,c12,d2,c21,c22,alfa1,aa1,bb1,aa2,bb2,v,w,a0,inva0,a1,a2,b0,b1,b2,
+rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    //---- added smoothing to prevent filters getting stuck
+    a_1 += smoothing * (a1 - a_1);
+    a_2 += smoothing * (a2 - a_2);
+    b_0 += smoothing * (b0 - b_0);
+    b_1 += smoothing * (b1 - b_1);
+    b_2 += smoothing * (b2 - b_2);
+
+    //---- left
+    rx_n2 = rx_n1;
+    rx_n1 = rx_n;
+    rx_n = spl0;
+
+    ru_n2 = ru_n1;
+    ru_n1 = ru_n;
+    ru_n = b_0*rx_n + b_1*rx_n1 + b_2*rx_n2 - a_1*ru_n1 - a_2*ru_n2;
+
+    //---- right
+    lx_n2 = lx_n1;
+    lx_n1 = lx_n;
+    lx_n = spl1;
+
+    lu_n2 = lu_n1;
+    lu_n1 = lu_n;
+    lu_n = b_0*lx_n + b_1*lx_n1 + b_2*lx_n2 - a_1*lu_n1 - a_2*lu_n2;
+
+    //----output
+    spl0 = ru_n;
+    spl1 = lu_n;
+
+);
+*/
+
+
+function highshelf.onepole.init()
+instance(lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)(
+
+    this.opamp.NE5534.init();
+    
+    lx_n = 0; lx_n1 = 0; lu_n = 0; lu_n1 = 0;
+    rx_n = 0; rx_n1 = 0; ru_n = 0; ru_n1 = 0;
+);
+
+function highshelf.onepole.slider(gain,freqk)
+instance(freq,fc,G,fm,phim,alpha,beta,smoothing,a1,b,b0,b1)(
+    
+    freq = freqk * 500 - 200;// - 1000;
+    fc = freq / (srate/2);
+    G = 10^(gain/20);
+    
+    fm = 0.9;
+    phim = 1 - cos($pi * fm);
+    
+    alpha = (2/sqr($pi)) * (1/(sqr(fm) * G * sqr(fc))) - (1/phim);
+    beta  = (2/sqr($pi)) * (G/(sqr(fm) * sqr(fc)))     - (1/phim);
+    
+    a1 = -alpha / (1 + alpha + sqrt(1 + 2*alpha));
+    b  = -beta  / (1 + beta  + sqrt(1 + 2*beta));
+    
+    b0 = (1 + a1) / (1 + b);
+    b1 = b * b0;
+);
+
+
+function highshelf.onepole.sample()
+instance(freq,fc,G,fm,phim,alpha,beta,smoothing,a1,b,b0,b1,a_1,b_0,b_1,lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)(
+    
+    G != 1 ? (
+    
+        //---- added smoothing to prevent filters getting stuck
+        smoothing = 0.5;
+        a_1 += smoothing * (a1 - a_1);
+        b_0 += smoothing * (b0 - b_0);
+        b_1 += smoothing * (b1 - b_1);
+        
+        //---- left
+        lx_n1 = lx_n;
+        lx_n = spl0;
+        
+        lu_n1 = lu_n;
+        lu_n = b_0*lx_n + b_1*lx_n1 - a_1*lu_n1;
+        
+        //---- right
+        rx_n1 = rx_n;
+        rx_n = spl1;
+        
+        ru_n1 = ru_n;
+        ru_n = b_0*rx_n + b_1*rx_n1 - a_1*ru_n1;
+        
+        switch1 ? (
+            spl0 = lu_n;
+            spl1 = ru_n;
+            ):(
+            spl0 = capacitor(lu_n);
+            spl1 = capacitor(ru_n);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+        
+        ):(
+        
+        switch1 ? (
+            spl0 = spl0;
+            spl1 = spl1;
+            ):(
+            spl0 = capacitor(spl0);
+            spl1 = capacitor(spl1);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+    );
+);
+
+/*
+function lowshelf.slider(gain,freq)
+instance(gain,freq,gain_linear,smoothing,g,fc,pihalf,invg,fc4,hny,f1,f14,h1,phi1,f2,f24,h2,phi2,
+d1,c11,c12,d2,c21,c22,alfa1,aa1,bb1,aa2,bb2,v,w,a0,inva0,a1,a2,ginva0,b0,b1,b2)(
+
+// Matched 2-Pole Butterworth Low Shelf Filter
+// -------------------------------------------
+// Inputs:
+// fc (center frequency/ Nyquist frequency)
+// gain (shelf gain factor)
+// Outputs:
+// a1, a2, b0, b1, b2 (biquad filter coefficients)
+// special case gain = 1 (flat response)
+
+    gain_linear = 10^(gain/20);
+    smoothing = 0.0005;
+
+    fc = freq / srate * 2;
+
+    (abs(1 - gain_linear) < 0.000001 ) ?
+    g = 1.00001 : g = 1.0/gain_linear;
+
+    // abbreviations
+    pihalf = 1.5708;
+    invg = 1.0/g;
+
+    // matching gain at Nyquist
+    fc4 = fc^4;
+    hny = (fc4 + g)/(fc4 + invg);
+
+    // matching gain at f_1
+    f1 = fc/sqrt(0.160 + 1.543*fc*fc);
+    f14 = f1^4;
+    h1 = (fc4 + f14*g)/(fc4 + f14*invg);
+    phi1 = sin(pihalf*f1)^2;
+
+    // matching gain at f_2
+    f2 = fc/sqrt(0.947 + 3.806*fc*fc);
+    f24 = f2^4;
+    h2 = (fc4 + f24*g)/(fc4 + f24*invg);
+    phi2 = sin(pihalf*f2)^2;
+
+    // linear equations coefficients
+    d1 = (h1 - 1.0)*(1.0 - phi1);
+    c11 = -phi1*d1;
+    c12 = phi1*phi1*(hny - h1);
+    d2 = (h2 - 1.0)*(1.0 - phi2);
+    c21 = -phi2*d2;
+    c22 = phi2*phi2*(hny - h2);
+
+    // linear equations solution
+    alfa1 = (c22*d1 - c12*d2)/(c11*c22 - c12*c21);
+    aa1 = (d1 - c11*alfa1)/c12;
+    bb1 = hny*aa1;
+
+    // compute A_2 and B_2
+    aa2 = 0.25*(alfa1 - aa1);
+    bb2 = 0.25*(alfa1 - bb1);
+
+    // compute biquad coefficients scaled with 1/a_0
+    v = 0.5*(1.0 + sqrt(aa1));
+    w = 0.5*(1.0 + sqrt(bb1));
+    a0 = 0.5*(v + sqrt(v*v + aa2));
+    inva0 = 1.0/a0;
+    a1 = (1.0 - v)*inva0;
+    a2 = -0.25*aa2*inva0*inva0;
+    ginva0 = invg*inva0;
+    b0 = (0.5*(w + sqrt(w*w + bb2)));
+    b1 = (1.0 - w)*ginva0;
+    b2 = (-0.25*bb2/b0)*ginva0;
+    b0 = b0*ginva0;
+
+);
+
+function lowshelf.sample()
+instance(gain,freq,gain_linear,smoothing,g,fc,pihalf,invg,fc4,hny,f1,f14,h1,phi1,f2,f24,h2,phi2,
+d1,c11,c12,d2,c21,c22,alfa1,aa1,bb1,aa2,bb2,v,w,a0,inva0,a1,a2,ginva0,b0,b1,b2,
+rx_n2,rx_n1,rx_n,ru_n2,ru_n1,ru_n,lx_n2,lx_n1,lx_n,lu_n2,lu_n1,lu_n)(
+
+    //---- added smoothing to prevent filters getting stuck
+    a_1 += smoothing * (a1 - a_1);
+    a_2 += smoothing * (a2 - a_2);
+    b_0 += smoothing * (b0 - b_0);
+    b_1 += smoothing * (b1 - b_1);
+    b_2 += smoothing * (b2 - b_2);
+
+    //---- left
+    rx_n2 = rx_n1;
+    rx_n1 = rx_n;
+    rx_n = spl0;
+
+    ru_n2 = ru_n1;
+    ru_n1 = ru_n;
+    ru_n = b_0*rx_n + b_1*rx_n1 + b_2*rx_n2 - a_1*ru_n1 - a_2*ru_n2;
+
+    //---- right
+    lx_n2 = lx_n1;
+    lx_n1 = lx_n;
+    lx_n = spl1;
+
+    lu_n2 = lu_n1;
+    lu_n1 = lu_n;
+    lu_n = b_0*lx_n + b_1*lx_n1 + b_2*lx_n2 - a_1*lu_n1 - a_2*lu_n2;
+
+    //----output
+    spl0 = ru_n;
+    spl1 = lu_n;
+
+);
+*/
+
+function lowshelf.onepole.init()
+instance(lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)(
+
+    this.opamp.NE5534.init();
+    
+    lx_n = 0; lx_n1 = 0; lu_n = 0; lu_n1 = 0;
+    rx_n = 0; rx_n1 = 0; ru_n = 0; ru_n1 = 0;
+);
+
+function lowshelf.onepole.slider(gain,freq)
+instance(freq,fc,G,fm,phim,alpha,beta,smoothing,a1,b,b0,b1)(
+
+    fc = freq / srate * 0.5;
+    G = 1/(10^(gain/20));
+
+    fm = 0.9;
+    phim = 1 - cos($pi * fm);
+
+    alpha = (2/sqr($pi)) * (1/(sqr(fm) * G * sqr(fc))) - (1/phim);
+    beta  = (2/sqr($pi)) * (G/(sqr(fm) * sqr(fc)))     - (1/phim);
+
+    a1 = -alpha / (1 + alpha + sqrt(1 + 2*alpha));
+    b  = -beta  / (1 + beta  + sqrt(1 + 2*beta));
+
+    b0 = (1 - a1) / (1 - b);
+    b1 = b * b0;
+);
+
+function lowshelf.onepole.sample()
+instance(freq,fc,G,fm,phim,alpha,beta,smoothing,a1,b,b0,b1,a_1,b_0,b_1,lx_n,lx_n1,lu_n,lu_n1,rx_n,rx_n1,ru_n,ru_n1)(
+
+    G != 1 ? (
+
+        //---- added smoothing to prevent filters getting stuck
+        smoothing = 0.5;
+        a_1 += smoothing * (a1 - a_1);
+        b_0 += smoothing * (b0 - b_0);
+        b_1 += smoothing * (b1 - b_1);
+    
+        //---- left
+        lx_n1 = lx_n;
+        lx_n = spl0;
+    
+        lu_n1 = lu_n;
+        lu_n = b_0*lx_n + b_1*lx_n1 - a_1*lu_n1;
+    
+        //---- right
+        rx_n1 = rx_n;
+        rx_n = spl1;
+    
+        ru_n1 = ru_n;
+        ru_n = b_0*rx_n + b_1*rx_n1 - a_1*ru_n1;
+    
+        switch1 ? (
+            spl0 = lu_n;
+            spl1 = ru_n;
+            ):(
+            spl0 = capacitor(lu_n);
+            spl1 = capacitor(ru_n);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+    
+        ):(
+        
+        switch1 ? (
+            spl0 = spl0;
+            spl1 = spl1;
+            ):(
+            spl0 = capacitor(spl0);
+            spl1 = capacitor(spl1);
+            spl0 = this.opamp.NE5534.sample(spl0);
+            spl1 = this.opamp.NE5534.sample(spl1);
+        );
+    
+    );
+);
+
+function vca.dbx202.init()
+instance(
+    Vt,
+    m1, m2, m3, m4,
+    Re,
+    lx_n, rx_n,
+    lemit, remit,
+    la, lb, lden,
+    ra, rb, rden,
+    lI1, lI2, lI3, lI4,
+    rI1, rI2, rI3, rI4,
+    lgain, rgain
+)(
+    Vt = 0.02585;
+    m1 = 1.0;
+    m2 = 1.003;
+    m3 = 0.997;
+    m4 = 1.002;
+    Re = 0.00001; // Saturation strength (-90dB 2nd harmonic for G+, -70dB for E)
+    lx_n = 0;
+    rx_n = 0;
+);
+
+function vca.dbx202.sample()
+instance(
+    Vt, m1, m2, m3, m4, Re,
+    lx_n, rx_n,
+    lemit, remit,
+    la, lb, lden,
+    ra, rb, rden,
+    lI1, lI2, lI3, lI4,
+    rI1, rI2, rI3, rI4,
+    lgain, rgain,
+    ly, ry, Ec
+)(
+    // Static control voltage (unity gain bias)
+    Ec = 0.0;
+
+    //---- Left Channel
+    lx_n = spl0;
+
+    la = exp((Ec/(2*Vt)) / Vt);
+    lb = exp((-Ec/(2*Vt)) / Vt);
+    lemit = lx_n * Re;
+    la = la * exp(-lemit/Vt);
+    lb = lb * exp(lemit/Vt);
+
+    lden = la + lb;
+    lI1 = m1*la/lden;
+    lI2 = m2*lb/lden;
+    lI3 = m3*lb/lden;
+    lI4 = m4*la/lden;
+    lgain = (lI1 + lI4);
+    ly = lx_n * lgain;
+
+    //---- Right Channel
+    rx_n = spl1;
+
+    ra = exp((Ec/(2*Vt)) / Vt);
+    rb = exp((-Ec/(2*Vt)) / Vt);
+    remit = rx_n * Re;
+    ra = ra * exp(-remit/Vt);
+    rb = rb * exp(remit/Vt);
+
+    rden = ra + rb;
+    rI1 = m1*ra/rden;
+    rI2 = m2*rb/rden;
+    rI3 = m3*rb/rden;
+    rI4 = m4*ra/rden;
+    rgain = (rI1 + rI4);
+    ry = rx_n * rgain;
+
+    spl0 = ly;
+    spl1 = ry;
+);
+
+
+        //GFX functions
+        
+        
+function gfx.mousefunctions()(
+
+    gfx.mouse.x.diff = mouse_x - gfx.mouse.x.prev;
+    gfx.mouse.x.prev = mouse_x;
+    gfx.mouse.y.diff = mouse_y - gfx.mouse.y.prev;
+    gfx.mouse.y.prev = mouse_y;
+    
+    gfx.mouse.left = mouse_cap & 1;
+    gfx.mouse.right = mouse_cap & 2;
+    gfx.mouse.middle = mouse_cap & 64;
+    
+    gfx.keyboard.ctrl = mouse_cap & 4;
+    gfx.keyboard.shift = mouse_cap & 8;
+    gfx.keyboard.alt = mouse_cap & 16;
+    gfx.keyboard.win = mouse_cap & 32;
+    
+    gfx.mouse.wheel = mouse_wheel;  mouse_wheel = 0;
+    gfx.mouse.wheel.horizontal = mouse_hwheel;  mouse_hwheel = 0;
+    
+    gfx.mouse.left.click = !gfx.mouse.left.prev && gfx.mouse.left;
+    gfx.mouse.left.release = gfx.mouse.left.prev && !gfx.mouse.left;
+    gfx.mouse.right.click = !gfx.mouse.right.prev && gfx.mouse.right;
+    gfx.mouse.right.release = gfx.mouse.right.prev && !gfx.mouse.right;
+    
+    gfx.mouse.left.doubleclick = gfx.mouse.left.click && gfx.mouse.left.doubleclick.time > 0;
+    gfx.mouse.left.click ? gfx.mouse.left.doubleclick.time = 5;
+    gfx.mouse.left.doubleclick ? gfx.mouse.left.doubleclick.time = 0;
+    gfx.mouse.left.doubleclick.time = max(0, gfx.mouse.left.doubleclick.time - 1);
+    
+    gfx.mouse.wheel.scroll = gfx.mouse.wheel != 0;
+    gfx.mouse.wheel.horizontal.scroll = gfx.mouse.wheel.horizontal != 0;
+    
+    gfx.mouse.left.prev = gfx.mouse.left;
+    gfx.mouse.right.prev = gfx.mouse.right;
+    gfx.mouse.middle.prev = gfx.mouse.middle;
+    
+    gfx.keyboard.ctrl.prev = gfx.keyboard.ctrl;
+    gfx.keyboard.shift.prev = gfx.keyboard.shift;
+    gfx.keyboard.alt.prev = gfx.keyboard.alt;
+    gfx.keyboard.win.prev = gfx.keyboard.win;
+    
+    gfx.cursor.default = 32512; //default cursor
+    gfx.cursor.hand = 32649;
+    
+);
+    
+function xy(x, y)
+    ( gfx_x = x; gfx_y = y; );
+     
+function rgb(r, g, b)
+    ( gfx_r = r; gfx_g = g; gfx_b = b; );
+
+function linearize(index, minvalue, maxvalue, curve, filesprites, degrees)(
+
+      floor(
+      pow((index - minvalue) / (maxvalue - minvalue),curve)
+      *(degrees/(360/filesprites)));
+
+);
+
+function sliderize(value, minvalue, maxvalue, step)(
+
+    truncate(clip(value,minvalue,maxvalue),step);
+
+);
+
+function gfx.knob.interaction(index, x, y, size, defvalue, minvalue, maxvalue, str, curve, step)
+instance(active, hover, hover.last, knob.cursor, index, x, y, knob_x, knob_y, width, height, minvalue, maxvalue, curve, step)(
+
+    ui_scale = gfx_w*size;
+    midpoint = (size/2)*ui_scale;
+    knob_x = gfx_w/2+x*0.01*gfx_w/2-midpoint;
+    knob_y = gfx_h/2+y*0.01*gfx_h/2-midpoint;
+    gfx.mouse.curve = 1+pow((index - minvalue) / (maxvalue - minvalue),curve);
+    
+    hover = knob_x < mouse_x && mouse_x < knob_x + size*ui_scale && knob_y < mouse_y && mouse_y < knob_y + size*ui_scale;
+    hover && gfx.mouse.left.click ? active = 1;
+    gfx.mouse.left.release ? active = 0;
+    
+    change = 0;
+    
+    //----drag
+    active ? (
+        index -= gfx.mouse.y.diff * gfx.mouse.curve * str * (gfx.keyboard.ctrl ? 0.1 : 1);
+        index = sliderize(index,minvalue,maxvalue,step);
+        change = 1;
+    );
+    
+    //----mousewheel
+    hover && gfx.mouse.wheel.scroll ? (
+        index += 0.1 * gfx.mouse.wheel * gfx.mouse.curve * str;
+        index = sliderize(index,minvalue,maxvalue,step);
+        change = 1;
+    );
+    
+    //----doubleclick
+    hover && gfx.mouse.left.doubleclick ? (
+        index = defvalue;
+        change = 1;
+    );
+    
+    //----alt click
+    hover && gfx.keyboard.alt && gfx.mouse.left.click? (
+        index = defvalue;
+        change = 1;
+    );
+    
+    index;
+
+);
+
+function gfx.button.interaction(index, states, x, y, w, h, scale, filesize)
+instance(hover, index, x, y, w, h button.x, button.y, button.w, button.h, button.l, button.r, button.top, button.bot, midpoint, scale)(
+
+    ui_scale = gfx_w*scale/filesize;
+    midpoint = (size/2)*ui_scale;
+    button.x = gfx_w/2+x*0.01*gfx_w/2-midpoint;
+    button.y = gfx_h/2+y*0.01*gfx_h/2-midpoint;
+    button.w = w*ui_scale;
+    button.h = h*ui_scale;
+    button.l = button.x + midpoint - button.w*0.5;
+    button.r = button.l + button.w;
+    button.top = button.y + midpoint - button.h*0.5;
+    button.bot = button.top + button.h;
+    
+    hover = button.l < mouse_x && mouse_x < button.r && button.top < mouse_y && mouse_y < button.bot;
+    
+    change = 0;
+    
+    /*
+    knob.cursor = hover;
+    knob.cursor != hover.last ? (
+        gfx_setcursor(knob.cursor ? 32646 : gfx.cursor.default);
+    );
+    hover.last = knob.cursor;
+    */
+    
+    //----click
+    hover && gfx.mouse.left.click ?
+        index = (index+1)%(states);
+    
+    index;
+
+);
+
+function gfx.bg(file, scale, file_w, file_h, filesprites)(
+    ui_scale = gfx_w*scale/filesize;
+    gfx_blit(file,gfx_w*scale/file_w,0,0,0,file_w,file_h);
+);
+
+function gfx.led(index, file, x, y, scale, filesize, filesprites)
+instance(index, file, x, y, scale, filesize, filesprites, ui_scale, midpoint, led.x, led.y)(
+
+    ui_scale = gfx_w*scale/filesize;
+    midpoint = (filesize/2)*ui_scale;
+    led.x = gfx_w/2+x*0.01*gfx_w/2-midpoint;
+    led.y = gfx_h/2+y*0.01*gfx_h/2-midpoint;
+    
+    gfx_blit(file,ui_scale,0,0,0,filesize,filesize,led.x,led.y);
+    
+    gfx_a = 0.9 + 0.1*abs(rand());
+    index ? (
+        gfx_blit(file,ui_scale,0,0,filesize,filesize,filesize,led.x,led.y);
+    );
+    gfx_a = 1;
+    
+);
+
+function gfx.knob(index, file, x, y, scale, filesize, filesprites, degrees, minvalue, maxvalue, curve)
+instance(index, file, x, y, knob_x, knob_y, midpoint, scale, filesize, filesprites, degrees, norm, minvalue, maxvalue, curve)(
+
+    norm = linearize(index, minvalue, maxvalue, curve, filesprites, degrees);
+    ui_scale = gfx_w*scale/filesize;
+    midpoint = (filesize/2)*ui_scale;
+    knob.x = gfx_w/2+x*0.01*gfx_w/2-midpoint;
+    knob.y = gfx_h/2+y*0.01*gfx_h/2-midpoint;
+    gfx_blit(file,ui_scale,0,0,(filesize*((360-degrees)/2/(360/filesprites))+filesize*norm),filesize,filesize,knob.x,knob.y);
+
+);
+
+function gfx.button.binary(index, file, x, y, w, h, scale, filesize, minvalue, maxvalue)
+instance(index, file, x, y, w, h, button.x, button.y, button.w, button.h, button.l, button.r, button.top, button.bot, midpoint, scale, filesize, minvalue, maxvalue, hover, active, press)(
+
+    ui_scale = gfx_w*scale/filesize;
+    midpoint = (filesize/2)*ui_scale;
+    button.x = gfx_w/2+x*0.01*gfx_w/2-midpoint;
+    button.y = gfx_h/2+y*0.01*gfx_h/2-midpoint;
+    button.w = w*ui_scale;
+    button.h = h*ui_scale;
+    button.l = button.x + midpoint - button.w*0.5;
+    button.r = button.l + button.w;
+    button.top = button.y + midpoint - button.h*0.5;
+    button.bot = button.top + button.h;
+    
+    hover = button.l < mouse_x && mouse_x < button.r && button.top < mouse_y && mouse_y < button.bot;
+    hover && gfx.mouse.left.click ? active = 1;
+    gfx.mouse.left.release ? active = 0;
+    
+    active && gfx.mouse.left && !index ? press = filesize;
+    active && gfx.mouse.left && index ? press = -filesize;
+    gfx.mouse.left.release ? press = 0;
+    
+    gfx_blit(file,ui_scale,0,0,(filesize*index*2+press),filesize,filesize,button.x,button.y);
+
+);
+
+hpf1.highpass.init();
+hpf2.highpass.init();
+hpf3.highpass.onepole.init();
+
+lpf.lowpass.init();
+
+hf.highshelf.onepole.init();
+hf.peaking.init();
+
+hmf.peaking.init();
+
+lmf.peaking.init();
+
+lf.lowshelf.onepole.init();
+lf.peaking.init();
+
+vca.dbx202.init();
+
+
+@slider
+
+
+hpf1.highpass.slider(hpf_hz,0.7);
+hpf2.highpass.slider(hpf_hz,0.85);
+hpf3.highpass.onepole.slider(hpf_hz);
+
+lpf.lowpass.slider(lpf_khz,0.707);
+
+hf.highshelf.onepole.slider(hf_db,hf_khz);
+hf.peaking.slider(hf_db*1.2*(1-0.005*hf_khz),hf_khz*1050,0.707*(1+0.05*hf_khz));
+
+hmf.peaking.slider(hmf_db,hmf_khz * 1500 - 200,hmf_q);
+
+lmf.peaking.slider(lmf_db,lmf_khz * 800,lmf_q);
+
+lf.lowshelf.onepole.slider(lf_db,lf_hz*13+200);
+lf.peaking.slider(lf_db*1.07,lf_hz*0.95+10,1.8);
+
+
+@sample
+
+
+dryL = spl0;
+dryR = spl1;
+
+hf_bell ? (
+    hf.peaking.sample();
+    ):(
+    hf.highshelf.onepole.sample();
+);
+
+hmf.peaking.sample();
+
+lmf.peaking.sample();
+
+lf_bell ? (
+    lf.peaking.sample();
+    ):(
+    lf.lowshelf.onepole.sample();
+);
+
+hpf_12db ? (
+    hpf1.highpass.sample();
+    ):(
+    hpf_hz > 9 ? (
+        hpf2.highpass.sample();
+        hpf3.highpass.onepole.sample()
+    );
+);
+
+
+lpf_khz < 25 ? lpf.lowpass.sample();
+
+!switch1 ? (
+    vca.dbx202.sample();
+    hiss = 0.000005;
+    spl0 += (rand(2) - 1) * hiss;
+    spl1 += (rand(2) - 1) * hiss;
+);
+
+switch2 ? (
+    spl0 -= dryL;
+    spl1 -= dryR;
+);
+
+switch3 ? (
+    spl0 = dryL;
+    spl1 = dryR;
+);
+
+
+
+@gfx 150 700
+
+gfx_width = 150;
+gfx_height = 700;
+
+embedded = (gfx_ext_flags & 1);
+!embedded ? (
+    gfx_w = gfx_width;
+    gfx_h = gfx_height;
+);
+embedded ? (
+    gfx_h = (gfx_height/gfx_width)*gfx_w;
+);
+
+gfx.mousefunctions();
+
+gfx.bg(0,1,150,700,1);
+
+knob_scale = 0.74;
+button_scale = 0.7;
+
+embedded ? (
+    knob_scale = 0.79;
+    button_scale = 0.75;
+);
+
+//---- left side
+x = -47; y = -78;
+
+hpf_hz.gfx.knob(hpf_hz,2,x,y,knob_scale,150,120,300,9,400,0.64);
+hpf_hz = hpf_hz.gfx.knob.interaction(hpf_hz,x,y,0.45,9,9,400,1,0.64,1);
+change ? hpf1.highpass.slider(hpf_hz,0.7);
+change ? hpf2.highpass.slider(hpf_hz,0.85);
+change ? hpf3.highpass.onepole.slider(hpf_hz);
+
+y = -54.3;
+hf_db.gfx.knob(hf_db,6,x,y,knob_scale,150,120,300,-15,15,1);
+hf_db = hf_db.gfx.knob.interaction(hf_db,x,y,0.45,0,-15,15,0.1,1,0.01);
+change ? hf.highshelf.onepole.slider(hf_db,hf_khz);
+change ? hf.peaking.slider(hf_db*1.2*(1-0.005*hf_khz),hf_khz*1050,0.707*(1+0.05*hf_khz));
+
+y = -29.3;
+hmf_db.gfx.knob(hmf_db,5,x,y,knob_scale,150,120,300,-15,15,1);
+hmf_db = hmf_db.gfx.knob.interaction(hmf_db,x,y,0.45,0,-15,15,0.1,1,0.01);
+change ? hmf.peaking.slider(hmf_db,hmf_khz * 1500 - 200,hmf_q);
+
+y = -5.7;
+hmf_q.gfx.knob(hmf_q,5,x,y,knob_scale,150,120,300,3,0.5,1.35);
+hmf_q = hmf_q.gfx.knob.interaction(hmf_q,x,y,0.45,1.5,0.5,3,-0.01,1.35,0.01);
+change ? hmf.peaking.slider(hmf_db,hmf_khz * 1500 - 200,hmf_q);
+
+y = 16;
+lmf_db.gfx.knob(lmf_db,4,x,y,knob_scale,150,120,300,-15,15,1);
+lmf_db = lmf_db.gfx.knob.interaction(lmf_db,x,y,0.45,0,-15,15,0.1,1,0.01);
+change ? lmf.peaking.slider(lmf_db,lmf_khz * 800,lmf_q);
+
+y = 40;
+lmf_q.gfx.knob(lmf_q,4,x,y,knob_scale,150,120,300,3,0.5,1.35);
+lmf_q = lmf_q.gfx.knob.interaction(lmf_q,x,y,0.45,1.5,0.5,3,-0.01,1.35,0.01);
+change ? lmf.peaking.slider(lmf_db,lmf_khz * 800,lmf_q);
+
+y = 64;
+lf_db.gfx.knob(lf_db,3,x,y,knob_scale,150,120,300,-15,15,1);
+lf_db = lf_db.gfx.knob.interaction(lf_db,x,y,0.45,0,-15,15,0.1,1,0.01);
+change ? lf.lowshelf.onepole.slider(lf_db,lf_hz*13+200);
+change ? lf.peaking.slider(lf_db*1.07,lf_hz*0.95+10,1.8);
+
+//---- right side
+x = 47; y = -89.9;
+
+lpf_khz.gfx.knob(lpf_khz,2,x,y,knob_scale,150,120,300,25,3,3);
+lpf_khz = lpf_khz.gfx.knob.interaction(lpf_khz,x,y,0.45,25,3,25,-0.07,3,0.01);
+change ? lpf.lowpass.slider(lpf_khz,0.707);
+
+y = -74.8;
+hpf_12db.gfx.button.binary(hpf_12db,10,x,y,54,30,button_scale,150,0,1);
+hpf_12db = hpf_12db.gfx.button.interaction(hpf_12db,2,x,y,54,30,button_scale,150);
+
+y = -57;
+hf_bell.gfx.button.binary(hf_bell,9,x,y,54,30,button_scale,150,0,1);
+hf_bell = hf_bell.gfx.button.interaction(hf_bell,2,x,y,54,30,button_scale,150);
+
+y = -42;
+hf_khz.gfx.knob(hf_khz,6,x,y,knob_scale,150,120,300,1.5,16,0.85);
+hf_khz = hf_khz.gfx.knob.interaction(hf_khz,x,y,0.45,8,1.5,16,0.05,0.85,0.01);
+change ? hf.highshelf.onepole.slider(hf_db,hf_khz);
+change ? hf.peaking.slider(hf_db*1.2*(1-0.005*hf_khz),hf_khz*1050,0.707*(1+0.05*hf_khz));
+
+y = -17.5;
+hmf_khz.gfx.knob(hmf_khz,5,x,y,knob_scale,150,120,300,0.6,7,0.7);
+hmf_khz = hmf_khz.gfx.knob.interaction(hmf_khz,x,y,0.45,3,0.6,7,0.02,0.7,0.01);
+change ? hmf.peaking.slider(hmf_db,hmf_khz * 1500 - 200,hmf_q);
+
+y = 0.12;
+first.gfx.button.binary(index,7,x,y,54,30,button_scale,150,0,1);
+//hf_bell = hf_bell.gfx.button.interaction(hf_bell,2,x,y,54,30,button_scale,300);
+
+y = 10.8;
+gfx.button.binary(index,7,x,y,54,30,button_scale,150,0,1);
+//hf_bell = hf_bell.gfx.button.interaction(hf_bell,2,x,y,54,30,button_scale,300);
+
+y = 28;
+lmf_khz.gfx.knob(lmf_khz,4,x,y,knob_scale,150,120,300,0.2,2.5,0.64);
+lmf_khz = lmf_khz.gfx.knob.interaction(lmf_khz,x,y,0.45,1,0.2,2.5,0.008,0.64,0.01);
+change ? lmf.peaking.slider(lmf_db,lmf_khz * 800,lmf_q);
+
+y = 52;
+lf_hz.gfx.knob(lf_hz,3,x,y,knob_scale,150,120,300,30,450,0.75);
+lf_hz = lf_hz.gfx.knob.interaction(lf_hz,x,y,0.45,200,30,450,1,0.75,1);
+change ? lf.lowshelf.onepole.slider(lf_db,lf_hz*13+200);
+change ? lf.peaking.slider(lf_db*1.07,lf_hz*0.95+10,1.8);
+
+y = 67;
+lf_bell.gfx.button.binary(lf_bell,9,x,y,54,30,button_scale,150,0,1);
+lf_bell = lf_bell.gfx.button.interaction(lf_bell,2,x,y,54,30,button_scale,150);
+
+
+//---- bottom knobs
+y = 87; x = -48;
+switch1.gfx.button.binary(switch1,11,x,y,30,54,button_scale,150,0,1);
+switch1 = switch1.gfx.button.interaction(switch1,2,x,y,30,54,button_scale,150);
+switch1.gfx.led(switch1,13,x+1,y+8.7,0.3,150,2);
+
+x = 0;
+switch2.gfx.button.binary(switch2,16,x,y,30,54,button_scale,150,0,1);
+switch2 = switch2.gfx.button.interaction(switch2,2,x,y,30,54,button_scale,150);
+switch2.gfx.led(switch2,14,x,y+8.7,0.3,150,2);
+
+x = 48;
+switch3.gfx.button.binary(switch3,12,x,y,30,54,button_scale,150,0,1);
+switch3 = switch3.gfx.button.interaction(switch3,2,x,y,30,54,button_scale,150);
+switch3.gfx.led(switch3,15,x-1,y+8.7,0.3,150,2);
