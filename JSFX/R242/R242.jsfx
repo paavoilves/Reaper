@@ -1,4 +1,6 @@
 desc:R242 (Ilves Audio)
+author:Ilves Audio
+version:0.1
 
 FIX LIST:
 
@@ -62,6 +64,25 @@ filename:13,GUI/led_green_small.png
 filename:14,GUI/led_yellow_small.png
 filename:15,GUI/led_red_small.png
 filename:16,GUI/button_isostat_vertical_delta_small.png
+
+@provides
+  GUI/E242_EQ_backplate_small.png
+  GUI/E242_EQ_backplate_guide_small.png
+  GUI/knob_sifam1_white_small.png
+  GUI/knob_sifam1_black_small.png
+  GUI/knob_sifam1_blue_small.png
+  GUI/knob_sifam1_green_small.png
+  GUI/knob_sifam1_red_small.png
+  GUI/button_isostat_horizontal_empty_small.png
+  GUI/button_isostat_vertical_empty_small.png
+  GUI/button_isostat_horizontal_bell_small.png
+  GUI/button_isostat_horizontal_12db_small.png
+  GUI/button_isostat_vertical_clean_small.png
+  GUI/button_isostat_vertical_bypass_small.png
+  GUI/led_green_small.png
+  GUI/led_yellow_small.png
+  GUI/led_red_small.png
+  GUI/button_isostat_vertical_delta_small.png
 
 
 @init
