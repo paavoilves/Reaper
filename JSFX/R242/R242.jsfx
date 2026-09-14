@@ -1,18 +1,26 @@
+version:0.1
 desc:R242 (Ilves Audio)
 author:Ilves Audio
-version:0.1
 
-FIX LIST:
+about:
+  # R242 (Ilves Audio)
+  
+  R242 is an EQ inspired by the E242 filters section of the SL611 channel strip known from SL 4000E consoles.
+  
+  The EQ uses Vicanek filters that are matched as close as possible with the original unit. It also emulates the opamps and capacitors in the signal chain, as well as a dbx202 voltage controlled amplifier.
+  
+  Includes:
+  - **High pass** and **low pass** filters, with high pass having the E242 "black knob" 18dB filter and a switchable 82E02 "brown knob" 12dB filter
+  - **High, high mid, low mid and low band filters**, with high and low bands having a switchable shelf/bell filter
+  - **Clean mode** which bypasses all saturation (opamp, capacitor and VCA emulations)
+  - **Delta mode** for checking exactly what the plugin changes in the signal
+  - **Bypass mode** for bypassing the plugin from the GUI
+  
+  *This plugin is still in development, having two buttons without a function yet. If you have any ideas for useful functionalities or other suggestions, please contact me via paavo@ilvesmusiikki.fi or paavoilves in Reaper Forum!*
 
-1. Find a reason for extra buttons
-    1. Clean DONE
-    2. Filter slope - black 18dB or fitted brown 12dB DONE
-    3. Bypass DONE
-    4. Delta DONE
-    5. SC insert - dry to spl0 & spl1, wet to spl2 & spl3
-    6. Auto gain?
-2. Apply NE5534 opamp clipping to EQ bands DONE
-3. Apply capacitor dielectric absorption (DA) to EQ bands (basically slight spl value smoothing) DONE
+  List for possible future changes:
+  - Sidechain switch with dry unchanged signal going to outputs 1&2 and wet equalized signal going to outputs 3&4
+  - Autogain in similar fashion as TDR plugins(?)
 
 
 slider1:hpf_hz=9<9,400,0.01:log=120>-HPF Hz
