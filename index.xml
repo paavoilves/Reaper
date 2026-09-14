@@ -4,7 +4,7 @@
   <!-- Effects -->
   <category name="EQ">
     <reapack name="R242" type="effect" desc="R242">
-      <version name="0.1" author="Ilves Audio" time="2026-09-13T11:00:00Z">
+      <version name="0.1.1" author="Ilves Audio" time="2026-09-14T12:06:00Z">
 
         <source file="R242.jsfx">https://raw.githubusercontent.com/paavoilves/Reaper/main/JSFX/R242/R242.jsfx</source>
 
