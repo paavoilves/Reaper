@@ -15,11 +15,13 @@ about:
   - **Clean mode** which bypasses all saturation (opamp, capacitor and VCA emulations)
   - **Delta mode** for checking exactly what the plugin changes in the signal
   - **Bypass mode** for bypassing the plugin from the GUI
+  - **MCP embeddable GUI** for using all instances easily from the mixer view
   
   *This plugin is still in development, having two buttons without a function yet. If you have any ideas for useful functionalities or other suggestions, please contact me via paavo@ilvesmusiikki.fi or paavoilves in Reaper Forum!*
 
-  List for possible future changes:
+  List of possible future changes:
   - Sidechain switch with dry unchanged signal going to outputs 1&2 and wet equalized signal going to outputs 3&4
+  - Full GUI in horizontal position with the embedded GUI in vertical position
   - Autogain in similar fashion as TDR plugins(?)
 
 
